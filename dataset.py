@@ -16,7 +16,7 @@ SAMPLE_SUBMISSION = os.path.join(DATA_ROOT, "test", "sample_submission.csv")
 # 原始mask像素值 -> 类别索引
 # 0: background, 38: Oil, 75: Stain, 113: Scratch
 CLASS_MAPPING = {0: 0, 38: 1, 75: 2, 113: 3}
-CLASS_NAMES = ["background", "Oil", "Stain", "Scratch"]
+CLASS_NAMES = ["background", "Oil", "Scratch", "Stain"]
 NUM_CLASSES = 4
 
 # 图像尺寸
@@ -26,7 +26,7 @@ ORIGIN_H, ORIGIN_W = 1080, 1920
 TRAIN_CONFIG = {
     "seed": 42,
     "n_folds": 5,
-    "batch_size": 1,
+    "batch_size": 2,
     "num_workers": 4,
     "epochs": 120,
     "lr": 1e-4,

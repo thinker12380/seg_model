@@ -104,11 +104,41 @@ def iou_score(pred, target, num_classes=4, ignore_index=0):
 
 # ================= 模型加载辅助 =================
 def load_model_checkpoint(model, checkpoint_path, strict=True):
-    state = torch.load(checkpoint_path, map_location="cpu")
-    if "model_state_dict" in state:
-        model.load_state_dict(state["model_state_dict"], strict=strict)
-    elif "state_dict" in state:
-        model.load_state_dict(state["state_dict"], strict=strict)
+    state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if isinstance(state, dict) and "model_state_dict" in state:
+        state_dict = state["model_state_dict"]
+    elif isinstance(state, dict) and "state_dict" in state:
+        state_dict = state["state_dict"]
+    elif isinstance(state, dict) and "model" in state and isinstance(state["model"], dict):
+        state_dict = state["model"]
     else:
-        model.load_state_dict(state, strict=strict)
+        state_dict = state
+
+    if not isinstance(state_dict, dict):
+        raise TypeError(f"Unsupported checkpoint format: {type(state_dict)}")
+
+    # 兼容 DataParallel / DDP 保存的权重前缀。
+    if any(key.startswith("module.") for key in state_dict):
+        state_dict = {
+            key.replace("module.", "", 1): value
+            for key, value in state_dict.items()
+        }
+
+    model_keys = list(model.state_dict().keys())
+    if model_keys:
+        needs_model_prefix = all(key.startswith("model.") for key in model_keys)
+        has_model_prefix = any(key.startswith("model.") for key in state_dict)
+        if needs_model_prefix and not has_model_prefix:
+            # 兼容 FDSNetAdapter 这类包装模型:
+            # checkpoint 保存的是原始模型键名，当前模型需要 model.xxx。
+            state_dict = {
+                f"model.{key}": value
+                for key, value in state_dict.items()
+            }
+
+    try:
+        model.load_state_dict(state_dict, strict=strict)
+    except RuntimeError:
+        # 对 FDSNet 等外部模型，允许忽略辅助头等不影响主输出的权重差异。
+        model.load_state_dict(state_dict, strict=False)
     return model

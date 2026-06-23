@@ -1,7 +1,20 @@
+import os
+import sys
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from models_official import SegNeXt_Official, Segmenter_Official_Linear, Segmenter_Official_Mask
+
+
+
+FDSNET_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fdsnet")
+if FDSNET_ROOT not in sys.path:
+    sys.path.insert(0, FDSNET_ROOT)
+
+try:
+    from core.models.fdsnet import FDSNet as RawFDSNet
+except ImportError:
+    RawFDSNet = None
 
 
 # ================= 简化版 MSCA 模块 =================
@@ -295,6 +308,28 @@ class ViTSegmentation(nn.Module):
         return out
 
 
+class FDSNetAdapter(nn.Module):
+    """
+    将原始 FDSNet 适配到当前项目统一接口:
+    - build_model() 返回单个分割 logits
+    - 兼容原项目训练/验证/推理流程
+    """
+    def __init__(self, num_classes=4):
+        super().__init__()
+        if RawFDSNet is None:
+            raise ImportError(
+                f"无法导入 FDSNet，请检查路径: {FDSNET_ROOT}"
+            )
+        # 默认关闭 aux，避免当前训练流程中产生未使用的辅助头。
+        self.model = RawFDSNet(num_classes=num_classes, aux=False)
+
+    def forward(self, x):
+        output = self.model(x)
+        if isinstance(output, (tuple, list)):
+            return output[0]
+        return output
+
+
 # ================= 使用 segmentation-models-pytorch 构建强基线 =================
 def create_smp_model(model_name="unetplusplus", encoder_name="tu-tf_efficientnetv2_l", num_classes=4, pretrained=False):
     """
@@ -317,9 +352,7 @@ def create_smp_model(model_name="unetplusplus", encoder_name="tu-tf_efficientnet
 # ================= 模型封装入口 =================
 MODEL_REGISTRY = {
     "segnext_lite": SegNeXtLite,
-    "segnext_official": SegNeXt_Official,
-    "segmenter_linear": lambda nc: Segmenter_Official_Linear(n_cls=nc),
-    "segmenter_mask": lambda nc: Segmenter_Official_Mask(n_cls=nc),
+    "fdsnet": FDSNetAdapter,
     "unet": lambda nc: create_smp_model("unet", "tu-tf_efficientnetv2_l", nc, pretrained=False),
     "unetplusplus": lambda nc: create_smp_model("unetplusplus", "tu-tf_efficientnetv2_l", nc, pretrained=False),
     "deeplabv3plus": lambda nc: create_smp_model("deeplabv3plus", "tu-tf_efficientnetv2_l", nc, pretrained=False),

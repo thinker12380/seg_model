@@ -157,7 +157,7 @@ python predict.py
 修改 `predict.py` 的 `model_paths` 参数：
 
 ```python
-model_paths = ["checkpoints/best_pseudo.pth"]
+model_paths = ["checkpoints_segNext/best_pseudo.pth"]
 ```
 
 ### 5.3 推理参数速查
